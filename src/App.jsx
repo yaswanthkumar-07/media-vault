@@ -1,3 +1,4 @@
+import axios from "axios";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -403,7 +404,7 @@ function MediaCard({ item, onToggle, onDelete, theme }) {
 
         <div className="flex items-center gap-2 mt-3">
           <button
-            onClick={() => onToggle(item.id)}
+            onClick={() => onToggle(item._id)}
             className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               item.watched
                 ? `bg-gradient-to-r ${t.btn} text-white opacity-80 hover:opacity-100`
@@ -414,7 +415,7 @@ function MediaCard({ item, onToggle, onDelete, theme }) {
             {item.watched ? "Watched" : "Unwatched"}
           </button>
           <button
-            onClick={() => onDelete(item.id)}
+            onClick={() => onDelete(item._id)}
             className="flex items-center justify-center w-8 h-8 rounded-xl bg-white/[0.04] text-white/25 hover:bg-red-500/20 hover:text-red-400 border border-white/8 transition-all"
           >
             <MdDelete className="text-sm" />
@@ -452,35 +453,86 @@ export default function App() {
   const [items, setItems] = useState(load);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
+  const [media, setMedia] = useState([]);
   const [sort, setSort] = useState("Newest");
   const [showSort, setShowSort] = useState(false);
 
-  useEffect(() => { save(items); }, [items]);
+  const fetchMedia = async () => {
+    try {
+      const response = await axios.get("http://localhost:5000/media");
+
+      console.log(response.data);
+
+      setMedia(response.data);
+    } catch (error) {
+      console.log(error);
+    }
+  };+
+
+  useEffect(() => {
+    fetchMedia();
+  }, []);
+
+  useEffect(() => {
+    save(items);
+  }, [items]);
 
   const theme = tab;
   const t = THEMES[theme];
 
-  const defaultType = { anime: "Anime", movies: "Movie", series: "Series", music: "Music" }[tab] || "Movie";
+  const defaultType = {
+    anime: "Anime",
+    movies: "Movie",
+    series: "Series",
+    music: "Music",
+  }[tab] || "Movie";
 
-  const addItem = useCallback((item) => {
-    setItems((prev) => [item, ...prev]);
-  }, []);
+const addItem = async (item) => {
+  try {
+    await axios.post("http://localhost:5000/media", item);
+
+    fetchMedia();
+
+  } catch (error) {
+    console.log(error);
+  }
+};
 
   const toggleItem = useCallback((id) => {
-    setItems((prev) => prev.map((i) => i.id === id ? { ...i, watched: !i.watched } : i));
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === id ? { ...i, watched: !i.watched } : i
+      )
+    );
   }, []);
 
-  const deleteItem = useCallback((id) => {
-    setItems((prev) => prev.filter((i) => i.id !== id));
-  }, []);
+const deleteItem = async (id) => {
+  try {
+    await axios.delete(`http://localhost:5000/media/${id}`);
 
+    fetchMedia();
+
+  } catch (error) {
+    console.log(error);
+  }
+};
   // source items (tab-filtered first)
-  const sourceItems = useMemo(() => {
-    if (tab === "home") return items;
-    const typeMap = { anime: "Anime", movies: "Movie", series: "Series", music: "Music" };
-    const ty = typeMap[tab];
-    return ty ? items.filter((i) => i.type === ty) : items;
-  }, [items, tab]);
+const sourceItems = useMemo(() => {
+  if (tab === "home") return media;
+
+  const typeMap = {
+    anime: "Anime",
+    movies: "Movie",
+    series: "Series",
+    music: "Music",
+  };
+
+  const ty = typeMap[tab];
+
+  return ty
+    ? media.filter((i) => i.type === ty)
+    : media;
+}, [media, tab]);
 
   const filteredItems = useMemo(() => {
     let result = sourceItems;
@@ -582,7 +634,7 @@ export default function App() {
             ) : (
               filteredItems.map((item) => (
                 <MediaCard
-                  key={item.id}
+                  key={item._id}
                   item={item}
                   onToggle={toggleItem}
                   onDelete={deleteItem}
