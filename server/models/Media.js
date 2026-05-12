@@ -15,10 +15,10 @@ const mediaSchema = new mongoose.Schema({
     type: String,
   },
 
-  status: {
-    type: String,
-    default: "planned",
-  },
+watched: {
+  type: Boolean,
+  default: false,
+},
 
   rating: {
     type: Number,

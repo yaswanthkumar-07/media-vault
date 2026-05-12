@@ -35,5 +35,19 @@ router.delete("/:id", async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+// UPDATE media
+router.put("/:id", async (req, res) => {
+  try {
+    const updatedMedia = await Media.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
 
+    res.json(updatedMedia);
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 module.exports = router;

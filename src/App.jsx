@@ -78,10 +78,7 @@ const TABS = [
 const FILTERS = ["All", "Anime", "Movie", "Series", "Music", "Watched", "Unwatched"];
 const SORTS = ["Newest", "Oldest", "Top Rated"];
 
-const LS_KEY = "mediavault_v2";
 
-const load = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch { return []; } };
-const save = (d) => localStorage.setItem(LS_KEY, JSON.stringify(d));
 
 // ─── Animated background ─────────────────────────────────────────────────────
 function CinematicBg({ theme }) {
@@ -260,7 +257,7 @@ function AddForm({ onAdd, theme, defaultType }) {
 
   const submit = () => {
     if (!title.trim()) return;
-    onAdd({ id: Date.now(), title: title.trim(), type, rating: Number(rating), watched: false, ts: Date.now() });
+    onAdd({ title: title.trim(), type, rating: Number(rating), watched: false});
     setTitle(""); setRating(8); setOpen(false);
   };
 
@@ -357,7 +354,7 @@ function AddForm({ onAdd, theme, defaultType }) {
 // ─── MediaCard ────────────────────────────────────────────────────────────────
 const TYPE_ICONS = { Anime: GiSwordman, Movie: MdMovie, Series: MdTv, Music: MdMusicNote };
 
-function MediaCard({ item, onToggle, onDelete, theme }) {
+function MediaCard({ item, onToggle, onDelete,setDeleteItemId, theme }) {
   const t = THEMES[theme];
   const Icon = TYPE_ICONS[item.type] || MdMovie;
 
@@ -404,7 +401,7 @@ function MediaCard({ item, onToggle, onDelete, theme }) {
 
         <div className="flex items-center gap-2 mt-3">
           <button
-            onClick={() => onToggle(item._id)}
+            onClick={() => onToggle(item._id, item.watched)}
             className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               item.watched
                 ? `bg-gradient-to-r ${t.btn} text-white opacity-80 hover:opacity-100`
@@ -415,7 +412,7 @@ function MediaCard({ item, onToggle, onDelete, theme }) {
             {item.watched ? "Watched" : "Unwatched"}
           </button>
           <button
-            onClick={() => onDelete(item._id)}
+            onClick={() => setDeleteItemId(item._id)}
             className="flex items-center justify-center w-8 h-8 rounded-xl bg-white/[0.04] text-white/25 hover:bg-red-500/20 hover:text-red-400 border border-white/8 transition-all"
           >
             <MdDelete className="text-sm" />
@@ -450,12 +447,14 @@ function EmptyState({ theme }) {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState("home");
-  const [items, setItems] = useState(load);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const [media, setMedia] = useState([]);
   const [sort, setSort] = useState("Newest");
   const [showSort, setShowSort] = useState(false);
+  const [deleteItemId, setDeleteItemId] = useState(null);
+  const [undoItem, setUndoItem] = useState(null);
+const [undoTimeout, setUndoTimeout] = useState(null);
 
   const fetchMedia = async () => {
     try {
@@ -467,15 +466,12 @@ export default function App() {
     } catch (error) {
       console.log(error);
     }
-  };+
+  };
 
   useEffect(() => {
     fetchMedia();
   }, []);
 
-  useEffect(() => {
-    save(items);
-  }, [items]);
 
   const theme = tab;
   const t = THEMES[theme];
@@ -498,23 +494,56 @@ const addItem = async (item) => {
   }
 };
 
-  const toggleItem = useCallback((id) => {
-    setItems((prev) =>
-      prev.map((i) =>
-        i.id === id ? { ...i, watched: !i.watched } : i
-      )
-    );
-  }, []);
-
-const deleteItem = async (id) => {
+const toggleItem = async (id, watched) => {
   try {
-    await axios.delete(`http://localhost:5000/media/${id}`);
+    await axios.put(`http://localhost:5000/media/${id}`, {
+      watched: !watched,
+    });
 
     fetchMedia();
 
   } catch (error) {
     console.log(error);
   }
+};
+
+const deleteItem = async (item) => {
+  // remove instantly from UI
+  setMedia((prev) => prev.filter((i) => i._id !== item._id));
+
+  // store deleted item
+  setUndoItem(item);
+
+  // clear previous timeout if exists
+  if (undoTimeout) {
+    clearTimeout(undoTimeout);
+  }
+
+  // start delete timer
+  const timeout = setTimeout(async () => {
+    try {
+      await axios.delete(`http://localhost:5000/media/${item._id}`);
+
+      setUndoItem(null);
+
+    } catch (error) {
+      console.log(error);
+    }
+  }, 5000);
+
+  setUndoTimeout(timeout);
+};
+const undoDelete = () => {
+  if (!undoItem) return;
+
+  // cancel backend delete
+  clearTimeout(undoTimeout);
+
+  // restore item
+  setMedia((prev) => [undoItem, ...prev]);
+
+  // clear undo state
+  setUndoItem(null);
 };
   // source items (tab-filtered first)
 const sourceItems = useMemo(() => {
@@ -533,19 +562,44 @@ const sourceItems = useMemo(() => {
     ? media.filter((i) => i.type === ty)
     : media;
 }, [media, tab]);
+const filteredItems = useMemo(() => {
+  let result = sourceItems;
 
-  const filteredItems = useMemo(() => {
-    let result = sourceItems;
-    const q = search.toLowerCase().trim();
-    if (q) result = result.filter((i) => i.title.toLowerCase().includes(q));
-    if (filter === "Watched") result = result.filter((i) => i.watched);
-    else if (filter === "Unwatched") result = result.filter((i) => !i.watched);
-    else if (["Anime", "Movie", "Series", "Music"].includes(filter)) result = result.filter((i) => i.type === filter);
-    if (sort === "Newest") result = [...result].sort((a, b) => b.ts - a.ts);
-    else if (sort === "Oldest") result = [...result].sort((a, b) => a.ts - b.ts);
-    else if (sort === "Top Rated") result = [...result].sort((a, b) => b.rating - a.rating);
-    return result;
-  }, [sourceItems, search, filter, sort]);
+  const q = search.toLowerCase().trim();
+
+  if (q)
+    result = result.filter((i) =>
+      i.title.toLowerCase().includes(q)
+    );
+
+  if (filter === "Watched")
+    result = result.filter((i) => i.watched);
+
+  else if (filter === "Unwatched")
+    result = result.filter((i) => !i.watched);
+
+  else if (["Anime", "Movie", "Series", "Music"].includes(filter))
+    result = result.filter((i) => i.type === filter);
+
+  if (sort === "Newest") {
+    result = [...result].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+  }
+
+  else if (sort === "Oldest") {
+    result = [...result].sort(
+      (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+    );
+  }
+
+  else if (sort === "Top Rated") {
+    result = [...result].sort((a, b) => b.rating - a.rating);
+  }
+
+  return result;
+
+}, [sourceItems, search, filter, sort]);
 
   return (
     <div className="min-h-screen text-white font-sans">
@@ -638,12 +692,84 @@ const sourceItems = useMemo(() => {
                   item={item}
                   onToggle={toggleItem}
                   onDelete={deleteItem}
+                  setDeleteItemId={setDeleteItemId}
                   theme={theme}
                 />
               ))
             )}
           </AnimatePresence>
         </motion.div>
+        <AnimatePresence>
+  {deleteItemId && (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#111]/90 backdrop-blur-2xl p-6"
+      >
+        <h2 className="text-xl font-bold text-white mb-2">
+          Delete Media?
+        </h2>
+
+        <p className="text-sm text-white/50 mb-6">
+          This action cannot be undone.
+        </p>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => setDeleteItemId(null)}
+            className="flex-1 py-3 rounded-2xl bg-white/[0.06] border border-white/10 text-white/60 hover:text-white transition-all"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={async () => {
+              const itemToDelete = media.find(
+  (i) => i._id === deleteItemId
+);
+
+await deleteItem(itemToDelete);
+              setDeleteItemId(null);
+            }}
+            className="flex-1 py-3 rounded-2xl bg-red-500/80 hover:bg-red-500 text-white font-semibold transition-all"
+          >
+            Delete
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
+<AnimatePresence>
+  {undoItem && (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 30 }}
+      className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[300]"
+    >
+      <div className="flex items-center gap-4 px-5 py-3 rounded-2xl border border-white/10 bg-black/80 backdrop-blur-2xl shadow-2xl">
+        <span className="text-sm text-white/70">
+          Deleted "{undoItem.title}"
+        </span>
+
+        <button
+          onClick={undoDelete}
+          className="text-sm font-bold text-red-400 hover:text-red-300 transition-colors"
+        >
+          Undo
+        </button>
+      </div>
+    </motion.div>
+  )}
+</AnimatePresence>
       </main>
     </div>
   );
