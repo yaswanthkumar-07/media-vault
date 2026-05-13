@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "target": "themediavault",
     "public": "dist",
     "ignore": [
       "firebase.json",

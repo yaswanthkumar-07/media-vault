@@ -43,4 +43,4 @@ To test your app locally:
 ```bash
 npx -y firebase-tools@latest emulators:start --only hosting
 ```
-This serves your app at `http://localhost:5000` by default.
+This serves your app at `${import.meta.env.VITE_API_URL}` by default.

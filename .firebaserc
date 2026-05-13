@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "mediavault-7"
-  }
+  },
+  "targets": {
+    "mediavault-7": {
+      "hosting": {
+        "themediavault": [
+          "themediavault"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
