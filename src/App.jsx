@@ -502,7 +502,7 @@ const addItem = async (item) => {
 const toggleItem = async (id, watched) => {
   try {
     await axios.put(
-      `${import.meta.env.VITE_API_URL}/api/media/${id}`,
+  `${import.meta.env.VITE_API_URL}/media/${id}`,
       {
         watched: !watched,
       }
@@ -531,7 +531,7 @@ const deleteItem = async (item) => {
   const timeout = setTimeout(async () => {
     try {
       await axios.delete(
-  `${import.meta.env.VITE_API_URL}/api/media/${item._id}`
+  `${import.meta.env.VITE_API_URL}/media/${item._id}`
 );
 
       setUndoItem(null);
@@ -776,7 +776,7 @@ await deleteItem(itemToDelete);
         >
           Undo
         </button>
-      </div>+
+      </div>
     </motion.div>
   )}
 </AnimatePresence>
